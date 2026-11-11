@@ -175,13 +175,17 @@ func (a *app) tickTimes(c *ui.Context) {
 
 // volumeButton is the speaker, which opens the volume in a popover above
 // it, as an AppKit popover: a native slider standing up, the volume in
-// percent over it. The wheel over the speaker turns it up and down
-// without opening it.
+// percent over it. Hovering shows it; the wheel turns it up and down.
 func (a *app) volumeButton(c *ui.Context, color ui.Color) {
 	b := iconButton(c.Key("volume-button"), volumeIcon(a.volume), 16, color, T("Volume"))
+	hovered := b.Hovered()
+	wasHovered := ui.Local(b, "hovered", func() bool { return false })
 	if b.Clicked() {
 		a.volumeOpen = !a.volumeOpen
+	} else if hovered && !*wasHovered && !b.Pressed() {
+		a.volumeOpen = true
 	}
+	*wasHovered = hovered
 	b.HandleInput(func(ev ui.InputEvent) bool { return a.scrollVolume(ev) })
 	pop := popoverColors(a.pal.dark)
 	ui.PopoverBase(c.Key("volume-popover"), b, &a.volumeOpen, func(panel ui.Element) {
@@ -250,10 +254,14 @@ func (a *app) nativeVolumeSlider(c *ui.Context, pop popover) {
 
 // scrollVolume turns the volume up as the wheel or the fingers scroll up.
 func (a *app) scrollVolume(ev ui.InputEvent) bool {
-	if ev.Kind != ui.InputScroll {
+	if ev.Kind != ui.InputScroll || ev.DY == 0 {
 		return false
 	}
-	a.volume = min(1, max(0, a.volume-float64(ev.DY)/400))
+	delta := float64(ev.DY) / 400
+	if !ev.Precise {
+		delta = math.Copysign(0.04, delta)
+	}
+	a.volume = min(1, max(0, a.volume-delta))
 	a.pl.SetVolume(a.volume)
 	return true
 }
